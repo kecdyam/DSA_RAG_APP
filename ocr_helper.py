@@ -1,3 +1,4 @@
+import io
 import os
 import pytesseract
 from PIL import Image
@@ -6,19 +7,40 @@ pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tessera
 CACHE = "ocr_cache"
 
 
-def ocr_page(page, filename, page_number):
-    os.makedirs(CACHE, exist_ok=True)
-    cache_file = os.path.join(CACHE, f"{filename}_p{page_number}.txt")
-
-    # OCR is slow, so reuse a saved result if we have one
-    if os.path.exists(cache_file):
-        with open(cache_file, encoding="utf-8") as f:
+def _read_cache(cache_name):
+    path = os.path.join(CACHE, cache_name + ".txt")
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as f:
             return f.read()
+    return None
 
-    pix = page.get_pixmap(dpi=200)   # turn the page into a picture
+
+def _write_cache(cache_name, text):
+    os.makedirs(CACHE, exist_ok=True)
+    with open(os.path.join(CACHE, cache_name + ".txt"), "w", encoding="utf-8") as f:
+        f.write(text)
+
+
+def ocr_page(page, filename, page_number):
+    name = f"{filename}_p{page_number}"
+    cached = _read_cache(name)
+    if cached is not None:
+        return cached
+    pix = page.get_pixmap(dpi=200)
     image = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
     text = pytesseract.image_to_string(image)
+    _write_cache(name, text)
+    return text
 
-    with open(cache_file, "w", encoding="utf-8") as f:
-        f.write(text)
+
+def ocr_image_bytes(data, cache_name):
+    cached = _read_cache(cache_name)
+    if cached is not None:
+        return cached
+    try:
+        image = Image.open(io.BytesIO(data)).convert("RGB")
+        text = pytesseract.image_to_string(image)
+    except Exception:
+        text = ""
+    _write_cache(cache_name, text)
     return text

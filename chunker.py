@@ -1,10 +1,11 @@
 import os
 import re
 import random
+import zipfile
 import pymupdf
 import docx   # comes from the python-docx package
 
-from ocr_helper import ocr_page
+from ocr_helper import ocr_page, ocr_image_bytes
 
 root = "DATA"
 
@@ -15,6 +16,16 @@ MIN_OCR_WORDS = 8   # OCR results with fewer real words are thrown away
 def good_ocr(text):
     words = re.findall(r"[A-Za-z]{3,}", text)
     return len(words) >= MIN_OCR_WORDS
+
+
+def good_image_ocr(text):
+    code_like = re.findall(r"[A-Za-z][A-Za-z-]{3,}\(", text)   # e.g. PARTITION(
+    words = re.findall(r"[A-Za-z]{4,}", text)
+    return len(code_like) >= 1 or len(words) >= 12
+
+def image_number(name):
+    numbers = re.findall(r"\d+", os.path.basename(name))
+    return int(numbers[0]) if numbers else 0
 
 
 def clean_pdf_text(text):
@@ -93,6 +104,17 @@ for folder, subfolders, files in os.walk(root):
                     continue
                 all_chunks.append({"text": piece, "source": filename,
                                    "page": None, "type": "docx"})
+
+            # pictures inside the Word file (for example pseudocode screenshots)
+            z = zipfile.ZipFile(path)
+            image_names = sorted((n for n in z.namelist() if n.startswith("word/media/")),
+                                 key=image_number)
+            for n in image_names:
+                ocr_text = ocr_image_bytes(z.read(n), f"{filename}_{os.path.basename(n)}")
+                if good_image_ocr(ocr_text):
+                    piece = f"Text read from a picture in {filename}:\n" + clean_pdf_text(ocr_text)
+                    all_chunks.append({"text": piece, "source": filename,
+                                       "page": None, "type": "docx"})
 
 if __name__ == "__main__":
     print("Total chunks:", len(all_chunks))
