@@ -51,7 +51,7 @@ retriever.py vector search + BM25 -> merge (RRF) -> theory-first ranking
 Requires Python 3.10 or newer.
 
 ```bash
-git clone https://github.com/kecdyam/demoDSAbot.git
+git clone https://github.com/kecdyam/DSA_RAG_APP.git
 cd demoDSAbot
 python -m venv venv
 venv\Scripts\activate          # Windows (on Mac/Linux: source venv/bin/activate)
