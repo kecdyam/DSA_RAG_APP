@@ -6,7 +6,7 @@ SECTIONS = {
     "Definition":   ("what is {t}", ""),
     "How it works": ("how does {t} work steps", ""),
     "Complexity":   ("{t} time complexity", r"o\(|complexity|log\s*n|θ|ω|theta|omega"),
-    "Code":         ("{t} pseudocode algorithm program", r"\b(for|while|return|void|int|if)\b|\w+\(\w(,\s*\w+)+\)"),
+    "Code":         ("{t} pseudocode algorithm program", r"\w[\w-]*\(\w+(,\s*\w+)+\)|[;{}]|←|:="),
 }
 
 def squash(text):
