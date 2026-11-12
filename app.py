@@ -4,10 +4,11 @@ import streamlit as st
 import streamlit.components.v1 as components
 from retriever import retrieve, MIN_SIMILARITY
 from llm import answer_stream, MODEL
+from cheatsheet import build_cheatsheet
 
 REFUSAL = "can't find that in the notes"
 NOT_FOUND_MSG = "I couldn't find that in your notes. Try naming a specific topic, like 'merge sort steps' or 'binary tree traversal'."
-EXAMPLES = ["Explain Big-O", "What is a leaf node?", "How does merge sort work?", "Explain heap sort"]  # use questions your notes answer
+EXAMPLES = ["Explain Big-O", "What is a leaf node?", "How does merge sort work?", "/cheatsheet merge sort"]
 FONTS = "@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600&family=Inter:wght@400;500&family=JetBrains+Mono:wght@500&display=swap');"
 CHATS_FILE = Path(__file__).with_name("chats.json")
 
@@ -94,8 +95,14 @@ def source_cards(sources):
                 f'<div class="src-t">{html.escape(s["preview"])}</div>{bar}</div>')
     return out
 
-def render_assistant(m):
+def render_assistant(m, key="x"):
+    if m.get("artifact"):
+        st.markdown(m["text"])
+        st.download_button("⬇ Download .md", m["text"], file_name=m["file"],
+                           mime="text/markdown", key=f"dl_{key}")
+        return
     if m["refused"]:
+        
         st.warning(m["text"])
     else:
         st.markdown(chipify(m["text"]), unsafe_allow_html=True)
@@ -116,12 +123,12 @@ st.markdown(
 question = st.chat_input("> ask a DSA question_") or st.session_state.pop("pending", None)
 
 # ---------- history / empty state ----------
-for m in messages:
+for i, m in enumerate(messages):
     with st.chat_message(m["role"]):
         if m["role"] == "user":
             st.write(m["text"])
         else:
-            render_assistant(m)
+            render_assistant(m, key=f"{st.session_state.current}_{i}")
 
 if not messages and not question:
     st.markdown('<div class="hero"><p>Ask a question, or start with one of these.</p></div>', unsafe_allow_html=True)
@@ -139,6 +146,26 @@ if question:
     messages.append({"role": "user", "text": question})
     with st.chat_message("user"):
         st.write(question)
+        
+    if question.strip().lower().startswith("/cheatsheet"):
+        topic = question.strip()[len("/cheatsheet"):].strip()
+        with st.chat_message("assistant"):
+            if not topic:
+                text = "Add a topic after the command, like `/cheatsheet merge sort`."
+                st.markdown(text)
+                msg = {"role": "assistant", "text": text, "sources": [], "refused": False, "footer": ""}
+            else:
+                with st.status(f"Building cheat sheet for {topic}...", expanded=False) as status:
+                    t0 = time.perf_counter()
+                    sheet = build_cheatsheet(topic)
+                    status.update(label=f"Cheat sheet ready · {time.perf_counter() - t0:.0f}s", state="complete")
+                msg = {"role": "assistant", "text": sheet, "artifact": True,
+                       "file": topic.replace(" ", "_") + "_cheatsheet.md",
+                       "sources": [], "refused": False, "footer": ""}
+                render_assistant(msg, key=f"{st.session_state.current}_{len(messages)}")
+        messages.append(msg)
+        save_chats()
+        st.stop()
 
     with st.chat_message("assistant"):
         t0 = time.perf_counter()
