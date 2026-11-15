@@ -5,7 +5,7 @@ from retriever import retrieve, MIN_SIMILARITY
 SECTIONS = {
     "Definition":   ("what is {t}", ""),
     "How it works": ("how does {t} work steps", ""),
-    "Complexity":   ("{t} time complexity", r"o\(|complexity|log\s*n|θ|ω|theta|omega"),
+    "Complexity":   ("{t} time complexity",   r"o\(|complexity|log\s*n|lg\s*n|θ|ω|theta|omega|running time|t\(n\)"),
     "Code":         ("{t} pseudocode algorithm program", r"\w[\w-]*\(\w+(,\s*\w+)+\)|[;{}]|←|:="),
 }
 

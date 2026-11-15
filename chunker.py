@@ -10,6 +10,7 @@ from ocr_helper import ocr_page, ocr_image_bytes
 root = "DATA"
 
 OCR_FILES = {"HEAP_SORT.pdf", "Graph_Module6_Lecture5.pdf"}   # printed PDFs only
+IMAGE_OCR_FILES = {"Merge_Sort.pdf"}   # typed PDFs whose embedded pictures (pseudocode) should be read
 MIN_OCR_WORDS = 8   # OCR results with fewer real words are thrown away
 
 
@@ -21,7 +22,8 @@ def good_ocr(text):
 def good_image_ocr(text):
     code_like = re.findall(r"[A-Za-z][A-Za-z-]{3,}\(", text)   # e.g. PARTITION(
     words = re.findall(r"[A-Za-z]{4,}", text)
-    return len(code_like) >= 1 or len(words) >= 12
+    formula = re.search(r"[OΘΩ]\s*\(|T\s*\(n\)", text)          # running-time formulas
+    return len(code_like) >= 1 or len(words) >= 12 or bool(formula)
 
 def image_number(name):
     numbers = re.findall(r"\d+", os.path.basename(name))
@@ -29,8 +31,8 @@ def image_number(name):
 
 
 def clean_pdf_text(text):
+    text = re.sub(r"[\u200b\u200c\u200d\ufeff]", "", text)
     text = re.sub(r"[ \t]+", " ", text)
-    text = re.sub(r"\n\s*\n+", "\n", text)
     return text.strip()
 
 
@@ -67,20 +69,30 @@ for folder, subfolders, files in os.walk(root):
         path = os.path.join(folder, filename)
         lower = filename.lower()
 
-        if lower.endswith(".pdf"):
+                if lower.endswith(".pdf"):
             doc = pymupdf.open(path)
             for page_number, page in enumerate(doc, start=1):
-                raw = page.get_text()
-                if filename in OCR_FILES and len(raw.strip()) < 50 and page.get_images():
+                text = clean_pdf_text(page.get_text())          # clean first, then measure
+                if filename in OCR_FILES and len(text) < 50 and page.get_images():
                     ocr_text = ocr_page(page, filename, page_number)
                     if good_ocr(ocr_text):
-                        raw = ocr_text
-                text = clean_pdf_text(raw)
+                        text = clean_pdf_text(ocr_text)
                 for piece in split_text(text):
                     if len(piece) < 50:
                         continue
                     all_chunks.append({"text": piece, "source": filename,
                                        "page": page_number, "type": "pdf"})
+
+                if filename in IMAGE_OCR_FILES:                 # read pictures inside the page, like we do for docx
+                    for img in page.get_images(full=True):
+                        xref = img[0]
+                        info = doc.extract_image(xref)
+                        if info["width"] < 150 or info["height"] < 50:
+                            continue                            # skip tiny icons
+                        ocr_text = ocr_image_bytes(info["image"], f"{filename}_p{page_number}_x{xref}")
+                        if good_image_ocr(ocr_text):
+                            all_chunks.append({"text": f"Text read from a picture in {filename}:\n" + clean_pdf_text(ocr_text),
+                                               "source": filename, "page": page_number, "type": "pdf"})
             doc.close()
 
         elif lower.endswith(".java"):
